@@ -16,6 +16,14 @@ enum LoginParser {
         return name.isEmpty ? nil : name
     }
 
+    /// Начало видимого текста страницы — для диагностики.
+    static func pageSnippet(_ html: String, limit: Int = 400) -> String {
+        let text = (try? SwiftSoup.parse(html).text()) ?? html
+        let collapsed = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(collapsed.prefix(limit))
+    }
+
     /// Вызывается, когда в ответе на вход не оказалось сессионной куки.
     static func parseFailure(html: String, loginURL: URL) throws -> LoginResult {
         let doc = try SwiftSoup.parse(html)

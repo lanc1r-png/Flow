@@ -12,6 +12,8 @@ public enum FlowError: Error, LocalizedError, Equatable {
     /// Вместо `.torrent` сайт вернул что-то другое.
     case invalidTorrentFile
     case badResponse(Int)
+    /// Неожиданный ответ сайта. Внутри — диагностика (код ответа, куки по именам, начало текста страницы).
+    case unexpectedPage(String)
 
     public var errorDescription: String? {
         switch self {
@@ -33,6 +35,8 @@ public enum FlowError: Error, LocalizedError, Equatable {
             return "Сайт вернул не .torrent-файл."
         case .badResponse(let code):
             return "Сайт ответил ошибкой \(code)."
+        case .unexpectedPage(let details):
+            return "Сайт вернул неожиданный ответ. Скопируйте текст ниже и пришлите разработчику.\n\n\(details)"
         }
     }
 

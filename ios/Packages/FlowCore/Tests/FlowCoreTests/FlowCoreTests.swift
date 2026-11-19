@@ -238,6 +238,26 @@ final class ClientTests: XCTestCase {
         XCTAssertTrue(body.contains("login=%C2%F5%EE%E4"))
     }
 
+    func testUnexpectedLoginPageProducesDiagnostics() async throws {
+        let transport = MockTransport { request in
+            HTTPResponse(
+                url: request.url!,
+                status: 200,
+                headers: ["Set-Cookie": "bb_ssl=1; Path=/"],
+                data: Data("<p>Service unavailable</p>".utf8)
+            )
+        }
+        do {
+            _ = try await RuTrackerClient(transport: transport).login(username: "u", password: "secret")
+            XCTFail("Ожидалась ошибка")
+        } catch FlowError.unexpectedPage(let details) {
+            XCTAssertTrue(details.contains("HTTP 200"))
+            XCTAssertTrue(details.contains("Set-Cookie: bb_ssl"))
+            XCTAssertTrue(details.contains("Service unavailable"))
+            XCTAssertFalse(details.contains("secret"))
+        }
+    }
+
     func testSearchBuildsQueryAndRequiresAuthorization() async throws {
         let page = authorizedPage
         let transport = MockTransport { request in

@@ -56,7 +56,31 @@ public final class RuTrackerClient: Sendable {
             }
             return .success(Session(token: token, username: user.name))
         }
-        return try LoginParser.parseFailure(html: response.text, loginURL: loginURL)
+        do {
+            return try LoginParser.parseFailure(html: response.text, loginURL: loginURL)
+        } catch let error as FlowError where error == .noData || error == .unknown {
+            throw FlowError.unexpectedPage(Self.diagnostics(for: response))
+        }
+    }
+
+    /// Описание ответа без секретов: значения кук и пароль сюда не попадают.
+    static func diagnostics(for response: HTTPResponse) -> String {
+        var lines = ["HTTP \(response.status), \(response.url.absoluteString)"]
+        if let type = response.header("Content-Type") { lines.append("Content-Type: \(type)") }
+        if let location = response.header("Location") { lines.append("Location: \(location)") }
+        if let raw = response.header("Set-Cookie"),
+           let regex = try? NSRegularExpression(pattern: "(?:^|,\\s*)([A-Za-z0-9_.\\-]+)=") {
+            let range = NSRange(raw.startIndex..., in: raw)
+            let names = regex.matches(in: raw, range: range).compactMap { match -> String? in
+                Range(match.range(at: 1), in: raw).map { String(raw[$0]) }
+            }
+            lines.append("Set-Cookie: " + (names.isEmpty ? "(пусто)" : names.joined(separator: ", ")))
+        } else {
+            lines.append("Set-Cookie: нет")
+        }
+        lines.append("Размер: \(response.data.count) байт")
+        lines.append("Текст: " + LoginParser.pageSnippet(response.text))
+        return lines.joined(separator: "\n")
     }
 
     /// Возвращает пользователя, если токен рабочий, иначе `nil`.

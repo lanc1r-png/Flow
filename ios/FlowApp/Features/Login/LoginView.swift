@@ -116,6 +116,7 @@ struct LoginView: View {
                 Text(errorText)
                     .font(.callout)
                     .foregroundStyle(.red)
+                    .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
