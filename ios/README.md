@@ -1,0 +1,87 @@
+# Flow для iPhone (SwiftUI)
+
+Неофициальный iOS-клиент рутрекера, переписанный на Swift по мотивам Android-приложения Flow
+(код которого лежит в соседних папках репозитория). Приложение **не скачивает раздачи само**:
+оно получает `.torrent`-файл или magnet-ссылку, а качает уже ваш торрент-клиент (например, iTorrent).
+
+Требования: Xcode последней версии, iOS 18+. На iOS 26+ интерфейс использует Liquid Glass,
+на iOS 18–25 те же элементы рисуются обычными материалами.
+
+## Что умеет (версия 0.1)
+
+- Вход по логину и паролю, с капчей. Токен сессии хранится в Keychain.
+- Поиск с сортировкой, порядком и периодом, постраничная подгрузка.
+- Страница раздачи: размер, сиды, личи, статус, описание.
+- Скачать `.torrent` → системное меню «Поделиться» → торрент-клиент или «Файлы».
+- Magnet: открыть в торрент-клиенте или скопировать.
+
+Пока нет: разделы форума, закладки, комментарии, история поиска, прокси и зеркало, форматированное описание.
+
+## Как собрать
+
+### Вариант 1: XcodeGen (рекомендуется)
+
+```bash
+brew install xcodegen
+cd ios
+xcodegen generate
+open Flow.xcodeproj
+```
+
+В Xcode: цель **Flow** → Signing & Capabilities → выберите свой Team и при необходимости
+поменяйте Bundle Identifier (`app.flow.rutracker.client` — это заглушка).
+
+### Вариант 2: вручную
+
+1. Xcode → File → New → Project → iOS App (SwiftUI), iOS 18.0, имя `Flow`.
+2. Удалите сгенерированные `FlowApp.swift` и `ContentView.swift`, перетащите в проект папку `FlowApp` из этого репозитория.
+3. File → Add Package Dependencies → Add Local → папка `Packages/FlowCore`, подключите продукт `FlowCore` к цели.
+
+### Тесты
+
+```bash
+swift test --package-path Packages/FlowCore
+```
+
+## Устройство
+
+```
+ios/
+├── project.yml                 описание проекта для XcodeGen
+├── Packages/FlowCore/          вся работа с сайтом, без интерфейса
+│   ├── Sources/FlowCore/
+│   │   ├── Network/            RuTrackerClient, URLSession, кодировка windows-1251
+│   │   ├── Parsing/            разбор HTML (SwiftSoup): поиск, раздача, вход
+│   │   └── Models/             модели и ошибки
+│   └── Tests/FlowCoreTests/
+└── FlowApp/                    приложение SwiftUI
+    ├── App/                    вход в приложение, состояние сессии, Keychain
+    ├── DesignSystem/           стеклянные компоненты (Glass.swift)
+    └── Features/               Login, Search, Topic, Account
+```
+
+Соответствие Android-версии (папка `core/network/rutracker`):
+
+| Swift | Kotlin |
+|---|---|
+| `RuTrackerClient.login` | `RuTrackerInnerApiImpl.login`, `LoginUseCase` |
+| `RuTrackerClient.search`, `SearchParser` | `GetSearchPageUseCase` |
+| `RuTrackerClient.torrent`, `TorrentParser` | `GetTorrentUseCase`, `ParseTorrentUseCase` |
+| `RuTrackerClient.downloadTorrentFile` | `GetTorrentFileUseCase`, `dl.php` |
+
+## Что проверять в первую очередь
+
+Код написан без возможности запустить его против настоящего сайта, поэтому вот места, где реальность может расходиться с ожиданиями:
+
+1. **Вход.** Должна появиться сессионная кука `bb_session`. Если вход «успешен», но возвращается ошибка — проверьте, что главная страница содержит `logged-in-username`.
+2. **Поиск по русским словам.** Значения в адресе отправляются в UTF-8, как в Android-версии. Если результаты странные, в `RuTrackerClient.init` переключите `queryEncoding` на `.windowsCP1251`.
+3. **Селекторы.** Парсеры используют те же CSS-селекторы, что и Flow. Если сайт поменял вёрстку, пустой список или ошибка «не удалось разобрать» — первый признак.
+4. **Тесты парсеров** используют HTML, написанный вручную, а не снимки настоящих страниц.
+5. **Magnet.** Рутрекер показывает magnet-ссылку только авторизованным. Кнопки неактивны, если ссылки на странице нет.
+6. Рутрекер может быть недоступен из вашей сети: приложение ходит на `https://rutracker.org/forum/` напрямую.
+
+## Оформление
+
+Стекло (`glassEffect`, `glassProminent`) используется для слоя управления: карточка входа, кнопки действий, всплывающие плашки.
+Строки списка и карточки с текстом оформлены обычными материалами, чтобы длинные списки не тормозили и текст оставался читаемым.
+Все вызовы iOS 26 обёрнуты в `#available` и `#if compiler(>=6.2)`, поэтому проект собирается и на более старых SDK.

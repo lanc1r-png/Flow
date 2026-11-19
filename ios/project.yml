@@ -1,0 +1,37 @@
+# Проект генерируется утилитой XcodeGen:  brew install xcodegen && xcodegen generate
+name: Flow
+options:
+  bundleIdPrefix: app.flow
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  developmentLanguage: ru
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  FlowCore:
+    path: Packages/FlowCore
+targets:
+  Flow:
+    type: application
+    platform: iOS
+    sources:
+      - FlowApp
+    dependencies:
+      - package: FlowCore
+    settings:
+      base:
+        # Замените на свой идентификатор и выберите Team в Xcode (Signing & Capabilities).
+        PRODUCT_BUNDLE_IDENTIFIER: app.flow.rutracker.client
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_CFBundleDisplayName: Flow
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
