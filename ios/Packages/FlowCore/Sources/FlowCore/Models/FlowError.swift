@@ -14,6 +14,8 @@ public enum FlowError: Error, LocalizedError, Equatable {
     case badResponse(Int)
     /// Неожиданный ответ сайта. Внутри — диагностика (код ответа, куки по именам, начало текста страницы).
     case unexpectedPage(String)
+    /// Cloudflare показал проверку браузером («Just a moment…»).
+    case challenge
 
     public var errorDescription: String? {
         switch self {
@@ -35,6 +37,8 @@ public enum FlowError: Error, LocalizedError, Equatable {
             return "Сайт вернул не .torrent-файл."
         case .badResponse(let code):
             return "Сайт ответил ошибкой \(code)."
+        case .challenge:
+            return "Сайт запросил проверку браузером (Cloudflare)."
         case .unexpectedPage(let details):
             return "Сайт вернул неожиданный ответ. Скопируйте текст ниже и пришлите разработчику.\n\n\(details)"
         }

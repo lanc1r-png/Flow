@@ -4,21 +4,9 @@ import SwiftUI
 struct LoginView: View {
     @Environment(SessionStore.self) private var session
 
-    @State private var username = ""
-    @State private var password = ""
-    @State private var captcha: Captcha?
-    @State private var captchaText = ""
-    @State private var isLoading = false
+    @State private var showWebLogin = false
+    @State private var isVerifying = false
     @State private var errorText: String?
-    @FocusState private var focus: Field?
-
-    private enum Field {
-        case username, password, captcha
-    }
-
-    private var canSubmit: Bool {
-        !username.isEmpty && !password.isEmpty && !isLoading && (captcha == nil || !captchaText.isEmpty)
-    }
 
     var body: some View {
         ZStack {
@@ -26,7 +14,7 @@ struct LoginView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     header
-                    form
+                    card
                     Text("Неофициальный клиент. Не связан с rutracker.org.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -36,7 +24,12 @@ struct LoginView: View {
                 .frame(maxWidth: 480)
                 .frame(maxWidth: .infinity)
             }
-            .scrollDismissesKeyboard(.interactively)
+        }
+        .sheet(isPresented: $showWebLogin) {
+            WebLoginSheet { result in
+                showWebLogin = false
+                Task { await verify(result) }
+            }
         }
     }
 
@@ -53,63 +46,18 @@ struct LoginView: View {
         .padding(.top, 48)
     }
 
-    private var form: some View {
+    private var card: some View {
         VStack(spacing: 14) {
+            Text("Рутрекер защищён проверкой браузера, поэтому вход выполняется на самом сайте. Войдите там как обычно, окно закроется само.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             if let notice = session.notice {
                 Text(notice)
                     .font(.callout)
                     .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            TextField("Логин", text: $username)
-                .textContentType(.username)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.next)
-                .focused($focus, equals: .username)
-                .onSubmit { focus = .password }
-                .padding(12)
-                .contentCard(cornerRadius: 14)
-
-            SecureField("Пароль", text: $password)
-                .textContentType(.password)
-                .submitLabel(captcha == nil ? .go : .next)
-                .focused($focus, equals: .password)
-                .onSubmit {
-                    if captcha == nil {
-                        submit()
-                    } else {
-                        focus = .captcha
-                    }
-                }
-                .padding(12)
-                .contentCard(cornerRadius: 14)
-
-            if let captcha {
-                VStack(spacing: 10) {
-                    AsyncImage(url: captcha.imageURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().scaledToFit()
-                        case .failure:
-                            Label("Не удалось загрузить картинку", systemImage: "exclamationmark.triangle")
-                                .font(.footnote)
-                        default:
-                            ProgressView()
-                        }
-                    }
-                    .frame(maxHeight: 80)
-
-                    TextField("Символы с картинки", text: $captchaText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.go)
-                        .focused($focus, equals: .captcha)
-                        .onSubmit(submit)
-                        .padding(12)
-                        .contentCard(cornerRadius: 14)
-                }
             }
 
             if let errorText {
@@ -120,46 +68,35 @@ struct LoginView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Button(action: submit) {
+            Button {
+                errorText = nil
+                showWebLogin = true
+            } label: {
                 ZStack {
-                    Text("Войти").opacity(isLoading ? 0 : 1)
-                    if isLoading { ProgressView() }
+                    Label("Войти через rutracker.org", systemImage: "safari")
+                        .opacity(isVerifying ? 0 : 1)
+                    if isVerifying { ProgressView() }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
             }
             .glassButton(prominent: true)
-            .disabled(!canSubmit)
+            .disabled(isVerifying)
         }
         .padding(20)
         .glassCard(cornerRadius: 28)
     }
 
-    private func submit() {
-        guard canSubmit else { return }
-        focus = nil
-        Task { await signIn() }
-    }
-
-    private func signIn() async {
-        isLoading = true
-        errorText = nil
-        defer { isLoading = false }
-
-        let answer = captcha.map { CaptchaAnswer(captcha: $0, value: captchaText) }
+    private func verify(_ result: WebLoginResult) async {
+        isVerifying = true
+        defer { isVerifying = false }
         do {
-            let result = try await session.signIn(username: username, password: password, captcha: answer)
-            switch result {
-            case .success:
-                break
-            case .wrongCredentials(let newCaptcha):
-                errorText = "Неверный логин или пароль."
-                captcha = newCaptcha
-                captchaText = ""
-            case .captchaRequired(let newCaptcha):
-                errorText = "Введите символы с картинки."
-                captcha = newCaptcha
-                captchaText = ""
+            let ok = try await session.completeWebLogin(
+                cookieHeader: result.cookieHeader,
+                userAgent: result.userAgent
+            )
+            if !ok {
+                errorText = "Вход не подтвердился. Попробуйте ещё раз."
             }
         } catch {
             errorText = FlowError.userMessage(for: error)

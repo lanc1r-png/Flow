@@ -238,6 +238,26 @@ final class ClientTests: XCTestCase {
         XCTAssertTrue(body.contains("login=%C2%F5%EE%E4"))
     }
 
+    func testCloudflareChallengeIsRecognized() async {
+        let page = "<html><title>Just a moment...</title><body>Enable JavaScript and cookies to continue</body></html>"
+        let client = RuTrackerClient(transport: MockTransport {
+            HTTPResponse(url: $0.url!, status: 403, headers: ["Content-Type": "text/html; charset=UTF-8"], data: Data(page.utf8))
+        })
+        do {
+            _ = try await client.search(token: "x", query: SearchQuery(text: "a"))
+            XCTFail("Ожидалась ошибка")
+        } catch {
+            XCTAssertEqual(error as? FlowError, .challenge)
+        }
+    }
+
+    func testUserAgentIsSent() async throws {
+        let transport = MockTransport { HTTPResponse(url: $0.url!, status: 200, data: Data("<p>x</p>".utf8)) }
+        let client = RuTrackerClient(transport: transport, userAgent: "TestAgent/1.0")
+        _ = try await client.currentUser(token: "bb_session=1")
+        XCTAssertEqual(transport.requests.first?.value(forHTTPHeaderField: "User-Agent"), "TestAgent/1.0")
+    }
+
     func testUnexpectedLoginPageProducesDiagnostics() async throws {
         let transport = MockTransport { request in
             HTTPResponse(

@@ -38,9 +38,7 @@ final class TopicViewModel {
             details = try await session.client.torrent(token: token, id: id)
             phase = .loaded
         } catch {
-            if (error as? FlowError) == .unauthorized {
-                session.handleUnauthorized()
-            } else if !(error is CancellationError) {
+            if !session.handleSessionError(error), !(error is CancellationError) {
                 phase = .failed(FlowError.userMessage(for: error))
             }
         }
@@ -62,9 +60,7 @@ final class TopicViewModel {
             try file.data.write(to: url, options: .atomic)
             shareItem = ShareItem(url: url)
         } catch {
-            if (error as? FlowError) == .unauthorized {
-                session.handleUnauthorized()
-            } else {
+            if !session.handleSessionError(error) {
                 showToast(FlowError.userMessage(for: error))
             }
         }

@@ -96,9 +96,7 @@ final class SearchViewModel {
             totalPages = result.totalPages
         } catch {
             // Ошибка догрузки не должна ломать уже показанные результаты.
-            if (error as? FlowError) == .unauthorized {
-                session.handleUnauthorized()
-            }
+            session.handleSessionError(error)
         }
     }
 
@@ -106,8 +104,7 @@ final class SearchViewModel {
         if error is CancellationError || (error as? URLError)?.code == .cancelled {
             return
         }
-        if (error as? FlowError) == .unauthorized {
-            session.handleUnauthorized()
+        if session.handleSessionError(error) {
             return
         }
         phase = .failed(FlowError.userMessage(for: error))
