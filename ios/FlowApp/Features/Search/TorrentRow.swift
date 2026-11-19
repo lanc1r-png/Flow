@@ -3,9 +3,14 @@ import SwiftUI
 
 struct TorrentRow: View {
     let torrent: TorrentSummary
+    var showsCategory = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if showsCategory, let category = torrent.category {
+                CategoryLine(category: category)
+            }
+
             Text(torrent.title)
                 .font(.headline)
                 .multilineTextAlignment(.leading)
@@ -19,7 +24,9 @@ struct TorrentRow: View {
             }
 
             HStack(spacing: 14) {
-                Label(torrent.size, systemImage: "internaldrive")
+                if !torrent.size.isEmpty {
+                    Label(torrent.size, systemImage: "internaldrive")
+                }
                 if let seeds = torrent.seeds {
                     Label("\(seeds)", systemImage: "arrow.up")
                         .foregroundStyle(.green)
@@ -35,13 +42,6 @@ struct TorrentRow: View {
             }
             .font(.caption.weight(.medium))
             .labelStyle(.titleAndIcon)
-
-            if let category = torrent.category {
-                Text(category.name)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)

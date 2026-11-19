@@ -320,3 +320,157 @@ final class ClientTests: XCTestCase {
         }
     }
 }
+
+// MARK: - Разделы, комментарии
+
+final class ForumTests: XCTestCase {
+    private let treeHTML = """
+    <div class="tree-root">
+      <div>
+        <span class="c-title" title="Игры">Игры</span>
+        <ul>
+          <li><div><a href="viewforum.php?f=10">PC</a></div>
+              <ul><li><a href="viewforum.php?f=11">Action</a></li></ul></li>
+          <li><div><a href="viewforum.php?f=20">PlayStation</a></div></li>
+        </ul>
+      </div>
+    </div>
+    <div class="tree-root">
+      <div>
+        <span class="c-title" title="Музыка">Музыка</span>
+        <ul><li><div><a href="viewforum.php?f=30">Рок</a></div></li></ul>
+      </div>
+    </div>
+    """
+
+    func testForumTree() throws {
+        let tree = try ForumTreeParser.parse(treeHTML)
+        XCTAssertEqual(tree.roots.map(\.name), ["Игры", "Музыка"])
+        XCTAssertEqual(tree.roots.map(\.id), ["c-0", "c-1"])
+        let games = tree.roots[0]
+        XCTAssertEqual(games.children.map(\.id), ["10", "20"])
+        XCTAssertEqual(games.children[0].children.map(\.id), ["11"])
+        XCTAssertEqual(games.forumIDs, ["10", "11", "20"])
+        XCTAssertEqual(tree.rootName(forForum: "11"), "Игры")
+        XCTAssertEqual(tree.rootName(forForum: "30"), "Музыка")
+        XCTAssertNil(tree.rootName(forForum: "999"))
+    }
+
+    func testForumTreeSearchAndCoding() throws {
+        let tree = try ForumTreeParser.parse(treeHTML)
+        let matches = tree.search("playstation")
+        XCTAssertEqual(matches.map(\.node.id), ["20"])
+        XCTAssertEqual(matches.first?.path, "Игры › PlayStation")
+
+        let data = try JSONEncoder().encode(tree)
+        let decoded = try JSONDecoder().decode(ForumTree.self, from: data)
+        XCTAssertEqual(decoded.roots, tree.roots)
+        XCTAssertEqual(decoded.rootName(forForum: "11"), "Игры")
+    }
+
+    func testEmptyTreeIsError() {
+        XCTAssertThrowsError(try ForumTreeParser.parse("<p>nothing</p>"))
+    }
+
+    func testForumIDFromHref() {
+        XCTAssertEqual(ParserUtils.forumID(from: "viewforum.php?f=7"), "7")
+        XCTAssertEqual(ParserUtils.forumID(from: "#f-123"), "123")
+        XCTAssertEqual(ParserUtils.forumID(from: "55"), "55")
+        XCTAssertNil(ParserUtils.forumID(from: "index.php"))
+    }
+
+    func testForumPage() throws {
+        let html = """
+        <div id="pagination"><p><b>2</b> из <b>5</b></p></div>
+        <h1 class="maintitle">Игры PC</h1>
+        <h4 class="forumlink"><a href="viewforum.php?f=11">Action</a></h4>
+        <table class="vf-table forum"><tbody>
+          <tr><td class="topicSep">Раздел</td></tr>
+          <tr class="hl-tr"><td id="555"></td>
+            <td><a class="tt-text">Game [PC] [2024]</a>
+              <span class="seedmed">10</span> <span class="leechmed">2</span>
+              <span class="f-dl">1.5&nbsp;GB</span>
+              <a class="topicAuthor" href="profile.php?mode=viewprofile&amp;u=7">bob</a>
+              <span class="tor-approved"></span></td></tr>
+          <tr class="hl-tr"><td id="556"></td><td><a class="tt-text">Обсуждение</a></td></tr>
+        </tbody></table>
+        """
+        let page = try ForumPageParser.parse(html, forumID: "10")
+        XCTAssertEqual(page.page, 2)
+        XCTAssertEqual(page.totalPages, 5)
+        XCTAssertEqual(page.name, "Игры PC")
+        XCTAssertEqual(page.subforums, [CategoryRef(id: "11", name: "Action")])
+        XCTAssertEqual(page.topics.count, 2)
+        let first = page.topics[0]
+        XCTAssertEqual(first.id, "555")
+        XCTAssertEqual(first.title, "Game")
+        XCTAssertEqual(first.tags, "[PC] [2024]")
+        XCTAssertEqual(first.size, "1.5 GB")
+        XCTAssertEqual(first.seeds, 10)
+        XCTAssertEqual(first.leeches, 2)
+        XCTAssertEqual(first.author, Author(id: "7", name: "bob"))
+        XCTAssertEqual(first.status, .approved)
+        XCTAssertEqual(first.category, CategoryRef(id: "10", name: "Игры PC"))
+        let second = page.topics[1]
+        XCTAssertNil(second.status)
+        XCTAssertEqual(second.title, "Обсуждение")
+    }
+
+    func testCommentsSkipDescriptionAndFormatQuotes() throws {
+        let html = """
+        <div id="pagination"><table><tbody><tr><td><p><b>1</b> из <b>3</b></p></td></tr></tbody></table></div>
+        <table>
+        <tbody id="post_1"><tr>
+          <td><p class="nick">Автор</p></td>
+          <td><a class="p-link">01-Янв-24 10:00</a>
+              <div class="post_body" id="p-111">Описание <a class="magnet-link" href="magnet:?xt=urn:btih:1">m</a></div></td>
+        </tr></tbody>
+        <tbody id="post_2"><tr>
+          <td><p class="nick">Вася</p>
+              <div class="avatar"><img src="https://example.com/a.png"></div>
+              <span class="poster_btn"><a class="txtb" href="profile.php?mode=viewprofile&amp;u=5">ЛС</a></span></td>
+          <td><a class="p-link">02-Янв-24 11:30</a>
+              <div class="post_body" id="p-222">Привет!<br><div class="q-wrap"><div class="q-head">Автор писал(а):</div><div class="q">цитата</div></div>ответ</div></td>
+        </tr></tbody>
+        </table>
+        """
+        let page = try CommentsParser.parse(html)
+        XCTAssertEqual(page.page, 1)
+        XCTAssertEqual(page.totalPages, 3)
+        XCTAssertEqual(page.comments.count, 1)
+        let comment = try XCTUnwrap(page.comments.first)
+        XCTAssertEqual(comment.id, "222")
+        XCTAssertEqual(comment.author, Author(id: "5", name: "Вася"))
+        XCTAssertEqual(comment.avatarURL, URL(string: "https://example.com/a.png"))
+        XCTAssertEqual(comment.dateText, "02-Янв-24 11:30")
+        XCTAssertEqual(comment.text, "Привет!\n▎ Автор писал(а):\n▎ цитата\nответ")
+    }
+
+    func testClientSearchAddsForumsAndLoadsComments() async throws {
+        let authorized = "<a id='logged-in-username' href='profile.php?u=42'>tester</a>"
+        let transport = MockTransport { request in
+            HTTPResponse(url: request.url!, status: 200, data: Data(authorized.utf8))
+        }
+        let client = RuTrackerClient(transport: transport)
+        _ = try await client.search(
+            token: "bb_session=abc",
+            query: SearchQuery(text: "x", forumIDs: ["1", "2"])
+        )
+        let searchURL = try XCTUnwrap(transport.requests.first?.url)
+        let items = URLComponents(url: searchURL, resolvingAgainstBaseURL: false)?.queryItems
+        XCTAssertEqual(items?.first { $0.name == "f" }?.value, "1,2")
+
+        let page = try await client.comments(token: "bb_session=abc", topicId: "9", page: 2)
+        XCTAssertTrue(page.comments.isEmpty)
+        let commentsURL = try XCTUnwrap(transport.requests.last?.url?.absoluteString)
+        XCTAssertEqual(commentsURL, "https://rutracker.org/forum/viewtopic.php?t=9&start=30")
+
+        let loggedOut = MockTransport { HTTPResponse(url: $0.url!, status: 200, data: Data("<p>x</p>".utf8)) }
+        do {
+            _ = try await RuTrackerClient(transport: loggedOut).comments(token: "x", topicId: "9")
+            XCTFail("Ожидалась ошибка авторизации")
+        } catch {
+            XCTAssertEqual(error as? FlowError, .unauthorized)
+        }
+    }
+}

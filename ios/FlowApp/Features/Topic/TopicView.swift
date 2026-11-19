@@ -18,6 +18,7 @@ struct TopicView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     header
                     stats
+                    commentsLink
                     descriptionSection
                 }
                 .padding(16)
@@ -65,9 +66,7 @@ struct TopicView: View {
             }
 
             if let category = model.details?.category ?? summary.category {
-                Label(category.name, systemImage: "folder")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                CategoryLine(category: category)
             }
             if let author = model.details?.author ?? summary.author {
                 Label(author.name, systemImage: "person")
@@ -94,6 +93,28 @@ struct TopicView: View {
                 StatTile(title: "Статус", value: status.title, color: .secondary)
             }
         }
+    }
+
+    private var commentsLink: some View {
+        NavigationLink {
+            CommentsView(topicID: summary.id, title: title)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .foregroundStyle(.tint)
+                Text("Комментарии")
+                    .font(.body.weight(.medium))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity)
+            .contentCard(cornerRadius: 16)
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

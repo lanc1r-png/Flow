@@ -95,6 +95,19 @@ enum PostTextExtractor {
                 out += textNode.getWholeText().replacingOccurrences(of: "\u{00A0}", with: " ")
             } else if let element = child as? Element {
                 let tag = element.tagName().lowercased()
+                if element.hasClass("q-wrap") {
+                    // Цитата: каждую строку помечаем полоской.
+                    var inner = ""
+                    walk(element, into: &inner)
+                    let quoted = inner
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .split(separator: "\n", omittingEmptySubsequences: false)
+                        .map { "▎ " + String($0) }
+                        .joined(separator: "\n")
+                    if !out.isEmpty, !out.hasSuffix("\n") { out += "\n" }
+                    out += quoted + "\n"
+                    continue
+                }
                 switch tag {
                 case "br":
                     out += "\n"

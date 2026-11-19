@@ -24,7 +24,7 @@ public enum FlowError: Error, LocalizedError, Equatable {
         case .forbidden:
             return "Доступ запрещён."
         case .notFound:
-            return "Раздача не найдена."
+            return "Страница не найдена."
         case .noData:
             return "Сайт вернул страницу, которую не удалось разобрать."
         case .unknown:

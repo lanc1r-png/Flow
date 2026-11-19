@@ -103,6 +103,7 @@ public final class RuTrackerClient: Sendable {
         let text = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let url = makeURL("tracker.php", query: [
             ("nm", text.isEmpty ? nil : text),
+            ("f", query.forumIDs.isEmpty ? nil : query.forumIDs.joined(separator: ",")),
             ("o", query.sort.rawValue),
             ("s", query.order.rawValue),
             ("tm", query.period.rawValue),
@@ -111,6 +112,47 @@ public final class RuTrackerClient: Sendable {
         let html = try await fetchHTML(url, token: token)
         guard LoginParser.isAuthorized(html) else { throw FlowError.unauthorized }
         return try SearchParser.parse(html)
+    }
+
+    // MARK: - Разделы
+
+    /// Дерево разделов. Меняется редко, приложение кэширует его на устройстве.
+    public func forumTree(token: String?) async throws -> ForumTree {
+        let html = try await fetchHTML(makeURL("index.php", query: [("map", "0")]), token: token)
+        return try ForumTreeParser.parse(html)
+    }
+
+    /// Страница форума: подфорумы и темы. Страницы нумеруются с 1, на странице до 50 тем.
+    public func forumPage(token: String?, id: String, page: Int = 1) async throws -> ForumPage {
+        let url = makeURL("viewforum.php", query: [
+            ("f", id),
+            ("start", page > 1 ? String(50 * (page - 1)) : nil),
+        ])
+        let html = try await fetchHTML(url, token: token)
+        if html.contains("Ошибочный запрос: не задан forum_id") || html.contains("Такого форума не существует") {
+            throw FlowError.notFound
+        }
+        if html.contains("Извините, только пользователи со специальными правами") {
+            throw FlowError.forbidden
+        }
+        return try ForumPageParser.parse(html, forumID: id)
+    }
+
+    // MARK: - Комментарии
+
+    /// Сообщения темы. Страницы нумеруются с 1, на странице до 30 сообщений.
+    /// У раздачи первое сообщение (описание с magnet-ссылкой) в комментарии не попадает.
+    public func comments(token: String, topicId: String, page: Int = 1) async throws -> CommentsPage {
+        let url = makeURL("viewtopic.php", query: [
+            ("t", topicId),
+            ("start", page > 1 ? String(30 * (page - 1)) : nil),
+        ])
+        let html = try await fetchHTML(url, token: token)
+        guard TopicChecks.exists(html) else { throw FlowError.notFound }
+        if TopicChecks.isModerated(html) { throw FlowError.onModeration }
+        if TopicChecks.isBlockedForRegion(html) { throw FlowError.blockedForRegion }
+        guard LoginParser.isAuthorized(html) else { throw FlowError.unauthorized }
+        return try CommentsParser.parse(html)
     }
 
     // MARK: - Раздача

@@ -224,17 +224,21 @@ public struct SearchQuery: Hashable, Sendable {
     public var sort: SearchSort
     public var order: SearchOrder
     public var period: SearchPeriod
+    /// Id форумов, в которых нужно искать (параметр `f`). Пусто — по всему трекеру.
+    public var forumIDs: [String]
 
     public init(
         text: String,
         sort: SearchSort = .date,
         order: SearchOrder = .descending,
-        period: SearchPeriod = .allTime
+        period: SearchPeriod = .allTime,
+        forumIDs: [String] = []
     ) {
         self.text = text
         self.sort = sort
         self.order = order
         self.period = period
+        self.forumIDs = forumIDs
     }
 }
 

@@ -105,3 +105,17 @@ enum TopicChecks {
         html.contains("Извините, раздача недоступна для вашего региона")
     }
 }
+
+extension ParserUtils {
+    /// Только цифры из строки: `tr-123` → `123`.
+    static func digits(_ string: String) -> String {
+        string.filter { $0.isASCII && $0.isNumber }
+    }
+
+    /// Id форума из ссылки: `viewforum.php?f=7`, `tracker.php?f=7`, `#f-7` или просто `7`.
+    static func forumID(from href: String) -> String? {
+        if let id = queryParam(href, "f"), !digits(id).isEmpty, digits(id) == id { return id }
+        let parts = href.split(whereSeparator: { !($0.isASCII && $0.isNumber) })
+        return parts.last.map(String.init)
+    }
+}

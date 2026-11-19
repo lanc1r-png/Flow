@@ -16,6 +16,8 @@ final class SearchViewModel {
     var sort: SearchSort = .date
     var order: SearchOrder = .descending
     var period: SearchPeriod = .allTime
+    /// Выбранные категории и форумы для поиска.
+    private(set) var selectedNodes: [ForumNode] = []
 
     private(set) var items: [TorrentSummary] = []
     private(set) var phase: Phase = .idle
@@ -26,15 +28,61 @@ final class SearchViewModel {
     private var activeQuery: SearchQuery?
     private var searchTask: Task<Void, Never>?
 
-    /// Меняется при изменении сортировки, порядка или периода — по нему view перезапускает поиск.
+    /// Меняется при изменении сортировки, порядка, периода или категорий — по нему view перезапускает поиск.
     var filterSignature: String {
-        "\(sort.rawValue)|\(order.rawValue)|\(period.rawValue)"
+        "\(sort.rawValue)|\(order.rawValue)|\(period.rawValue)|" + selectedNodes.map(\.id).joined(separator: ",")
     }
+
+    /// Id всех форумов, по которым ищем (выбранные узлы вместе с вложенными).
+    var forumIDs: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for node in selectedNodes {
+            for id in node.forumIDs where seen.insert(id).inserted {
+                result.append(id)
+            }
+        }
+        return result
+    }
+
+    // MARK: - Категории
+
+    enum SelectionState {
+        case none
+        case partial
+        case full
+    }
+
+    func state(of node: ForumNode) -> SelectionState {
+        if selectedNodes.contains(where: { $0.id == node.id }) { return .full }
+        let inside = Set(node.descendantIDs)
+        if selectedNodes.contains(where: { inside.contains($0.id) }) { return .partial }
+        return .none
+    }
+
+    func toggle(_ node: ForumNode) {
+        if let index = selectedNodes.firstIndex(where: { $0.id == node.id }) {
+            selectedNodes.remove(at: index)
+        } else {
+            selectedNodes.append(node)
+        }
+    }
+
+    func remove(_ node: ForumNode) {
+        selectedNodes.removeAll { $0.id == node.id }
+    }
+
+    func clearForums() {
+        selectedNodes = []
+    }
+
+    // MARK: - Поиск
 
     func search(session: SessionStore) {
         let text = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        let query = SearchQuery(text: text, sort: sort, order: order, period: period)
+        let ids = forumIDs
+        guard !text.isEmpty || !ids.isEmpty else { return }
+        let query = SearchQuery(text: text, sort: sort, order: order, period: period, forumIDs: ids)
 
         searchTask?.cancel()
         searchTask = Task { [weak self] in
@@ -42,9 +90,20 @@ final class SearchViewModel {
         }
     }
 
-    /// Повторяет последний поиск с новыми параметрами сортировки (если поиск уже выполнялся).
+    /// Повторяет последний поиск с новыми параметрами (если поиск уже выполнялся или выбраны категории).
     func refreshIfSearched(session: SessionStore) {
-        guard activeQuery != nil || phase != .idle else { return }
+        let hasText = !queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !hasText && selectedNodes.isEmpty {
+            // Всё сброшено — возвращаемся к пустому экрану поиска.
+            searchTask?.cancel()
+            items = []
+            page = 0
+            totalPages = 0
+            activeQuery = nil
+            phase = .idle
+            return
+        }
+        guard activeQuery != nil || phase != .idle || !selectedNodes.isEmpty else { return }
         search(session: session)
     }
 

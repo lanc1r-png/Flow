@@ -4,12 +4,16 @@ import SwiftUI
 struct SearchView: View {
     @Environment(SessionStore.self) private var session
     @State private var model = SearchViewModel()
+    @State private var showsCategories = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 AppBackground()
-                content
+                VStack(spacing: 0) {
+                    selectedChips
+                    content
+                }
             }
             .navigationTitle("Поиск")
             .navigationDestination(for: TorrentSummary.self) { summary in
@@ -18,7 +22,11 @@ struct SearchView: View {
             .searchable(text: $model.queryText, prompt: "Название раздачи")
             .onSubmit(of: .search) { model.search(session: session) }
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { categoriesButton }
                 ToolbarItem(placement: .topBarTrailing) { filterMenu }
+            }
+            .sheet(isPresented: $showsCategories) {
+                CategoryPickerView(model: model)
             }
             .onChange(of: model.filterSignature) {
                 model.refreshIfSearched(session: session)
@@ -33,7 +41,7 @@ struct SearchView: View {
             ContentUnavailableView(
                 "Поиск раздач",
                 systemImage: "magnifyingglass",
-                description: Text("Введите название и нажмите «Найти».")
+                description: Text("Введите название и нажмите «Найти» или выберите категории: игры, фильмы, музыка, книги…")
             )
         case .loading:
             ProgressView("Ищу…")
@@ -72,6 +80,45 @@ struct SearchView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
+    }
+
+    @ViewBuilder
+    private var selectedChips: some View {
+        if !model.selectedNodes.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(model.selectedNodes) { node in
+                        Button {
+                            model.remove(node)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(node.name)
+                                    .lineLimit(1)
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .font(.footnote.weight(.medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(.thinMaterial, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Убрать категорию \(node.name)")
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+            }
+        }
+    }
+
+    private var categoriesButton: some View {
+        Button {
+            showsCategories = true
+        } label: {
+            Image(systemName: model.selectedNodes.isEmpty ? "square.grid.2x2" : "square.grid.2x2.fill")
+        }
+        .accessibilityLabel("Категории")
     }
 
     private var filterMenu: some View {

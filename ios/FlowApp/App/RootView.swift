@@ -22,15 +22,21 @@ struct RootView: View {
 }
 
 private enum AppTab: Hashable {
+    case home
     case account
     case search
 }
 
 private struct MainTabs: View {
-    @State private var selection: AppTab = .search
+    @Environment(SessionStore.self) private var session
+    @State private var selection: AppTab = .home
+    @State private var forums = ForumStore()
 
     var body: some View {
         TabView(selection: $selection) {
+            Tab("Главная", systemImage: "house", value: AppTab.home) {
+                HomeView()
+            }
             Tab("Аккаунт", systemImage: "person.crop.circle", value: AppTab.account) {
                 AccountView()
             }
@@ -40,5 +46,7 @@ private struct MainTabs: View {
             }
         }
         .minimizeTabBarOnScroll()
+        .environment(forums)
+        .task { await forums.loadIfNeeded(session: session) }
     }
 }
