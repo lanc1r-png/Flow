@@ -11,6 +11,9 @@ on:
       - 'ios/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-26
@@ -33,11 +36,42 @@ jobs:
           brew install xcodegen
           xcodegen generate
 
-      - name: Build app (iOS Simulator)
+      # Сборка для устройства без подписи: такой .ipa подписывают AltStore / SideStore
+      # (или Sideloadly) вашим Apple ID при установке на iPhone.
+      - name: Build app (unsigned, for device)
         run: |
           xcodebuild \
             -project Flow.xcodeproj \
             -scheme Flow \
-            -destination 'generic/platform=iOS Simulator' \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
             build 2>&1 | tail -n 300
+
+      - name: Package .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Flow.app Payload/
+          zip -qry Flow.ipa Payload
+          ls -lh Flow.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Flow-ipa
+          path: ios/Flow.ipa
+
+      # Свежая сборка всегда лежит в релизе «ios-latest»: оттуда .ipa можно скачать прямо на iPhone.
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-latest
+          name: Flow для iPhone (последняя сборка)
+          body: |
+            Неподписанный .ipa для установки через AltStore, SideStore или Sideloadly.
+            Собрано из коммита ${{ github.sha }}.
+          prerelease: true
+          files: ios/Flow.ipa
