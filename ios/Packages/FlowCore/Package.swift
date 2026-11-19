@@ -4,9 +4,9 @@ import PackageDescription
 let package = Package(
     name: "FlowCore",
     platforms: [
-        .iOS(.v18),
+        .iOS("18.0"),
         // macOS нужен только для того, чтобы гонять тесты командой `swift test`.
-        .macOS(.v14),
+        .macOS("14.0"),
     ],
     products: [
         .library(name: "FlowCore", targets: ["FlowCore"]),
